@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RaionShop Admin</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin:20px; max-width: 1100px; }
+    .card { border:1px solid #ddd; border-radius:8px; padding:10px; margin-bottom:12px; }
+    .row { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:8px; }
+    input, button { padding:8px; }
+    table { width:100%; border-collapse:collapse; }
+    th, td { border:1px solid #ddd; padding:6px; text-align:left; }
+  </style>
+</head>
+<body>
+  <h1>RaionShop — Admin Panel</h1>
+
+  <div class="card">
+    <h3>Авторизация (demo)</h3>
+    <div class="row">
+      <input id="adminId" type="number" placeholder="Admin ID" value="123456789" />
+      <button onclick="reloadAll()">Подключиться</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Пользователи</h3>
+    <div class="row">
+      <input id="targetUser" type="number" placeholder="User ID" />
+      <input id="newBalance" type="number" placeholder="New balance" />
+      <button onclick="setBalance()">Установить баланс</button>
+    </div>
+    <table id="usersTable"></table>
+  </div>
+
+  <div class="card">
+    <h3>Заказы</h3>
+    <table id="ordersTable"></table>
+  </div>
+
+  <div class="card">
+    <h3>Платежные системы</h3>
+    <div id="payments"></div>
+  </div>
+
+  <script>
+    function adminHeaders() {
+      return {
+        'Content-Type': 'application/json',
+        'x-admin-id': String(Number(document.getElementById('adminId').value || 0))
+      };
+    }
+
+    async function j(url, options = {}) {
+      const res = await fetch(url, { ...options, headers: { ...adminHeaders(), ...(options.headers || {}) } });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Request failed');
+      return data;
+    }
+
+    function renderTable(el, rows) {
+      if (!rows.length) {
+        el.innerHTML = '<tr><td>Нет данных</td></tr>';
+        return;
+      }
+      const keys = Object.keys(rows[0]);
+      let html = '<tr>' + keys.map(k => `<th>${k}</th>`).join('') + '</tr>';
+      for (const r of rows) {
+        html += '<tr>' + keys.map(k => `<td>${r[k]}</td>`).join('') + '</tr>';
+      }
+      el.innerHTML = html;
+    }
+
+    async function loadUsers() {
+      const users = await j('/api/admin/users');
+      renderTable(document.getElementById('usersTable'), users);
+    }
+
+    async function loadOrders() {
+      const orders = await j('/api/admin/orders');
+      renderTable(document.getElementById('ordersTable'), orders);
+    }
+
+    async function loadPayments() {
+      const payments = await j('/api/admin/payment');
+      const root = document.getElementById('payments');
+      root.innerHTML = '';
+      for (const p of payments) {
+        const btn = document.createElement('button');
+        btn.textContent = `${p.enabled ? '🟢' : '🔴'} ${p.name}`;
+        btn.onclick = async () => {
+          await j(`/api/admin/payment/${p.name}/toggle`, { method: 'POST' });
+          await loadPayments();
+        };
+        root.appendChild(btn);
+      }
+    }
+
+    async function setBalance() {
+      const user_id = Number(document.getElementById('targetUser').value);
+      const balance = Number(document.getElementById('newBalance').value);
+      await j('/api/admin/user/balance', {
+        method: 'POST',
+        body: JSON.stringify({ user_id, balance })
+      });
+      await loadUsers();
+    }
+
+    async function reloadAll() {
+      try {
+        await Promise.all([loadUsers(), loadOrders(), loadPayments()]);
+      } catch (e) {
+        alert(e.message);
+      }
+    }
+
+    reloadAll();
+  </script>
+</body>
+</html>
